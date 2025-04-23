@@ -1,3 +1,6 @@
 qdrant-client
 retina-face
 deepface
+fastapi
+uvicorn
+python-multipart

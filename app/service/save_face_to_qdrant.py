@@ -1,30 +1,47 @@
+import uuid
 from app.utils.qdrant import client
 from app.config.settings import COLLECTION_NAME
-import uuid
+from app.service.extract_vector import extract_vector
 
 
-def save_face_to_qdrant(face_vector, metadata: dict):
+async def save_face_to_qdrant(img_np, user_id):
     """
-    Lưu vector khuôn mặt và metadata vào Qdrant.
-    :param face_vector: np.array hoặc list số (vector embedding)
-    :param metadata: dict (chứa thông tin bổ sung: tên, v.v.)
-    :return: id của point đã lưu (uuid)
+    Nhận ảnh đầu vào (np.array), trích xuất vector và lưu vào Qdrant kèm theo user_id.
+    :param img_np: Ảnh đầu vào dạng numpy array (RGB)
+    :param user_id: ID người dùng cần lưu
+    :return: ID của vector đã lưu (uuid)
     """
-    if face_vector is None or metadata is None:
-        raise ValueError("Vector hoặc metadata không hợp lệ!")
+    if img_np is None:
+        raise ValueError("Thiếu ảnh đầu vào!")
 
-    # Tạo id duy nhất cho mỗi khuôn mặt
+    if not user_id:
+        raise ValueError("Thiếu user_id!")
+
+    # Trích xuất vector từ ảnh
+    vector = await extract_vector(img_np)
+
+    if vector is None or len(vector) == 0:
+        raise ValueError("Không trích xuất được vector khuôn mặt!")
+
+    # Metadata kèm theo user_id
+    metadata = {"user_id": user_id}
+
+    # Tạo ID duy nhất cho vector
     point_id = str(uuid.uuid4())
 
-    # Qdrant point format
-    client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=[
-            {
-                "id": point_id,
-                "vector": face_vector.tolist() if hasattr(face_vector, "tolist") else face_vector,
-                "payload": metadata
-            }
-        ]
-    )
+    try:
+        # Thực hiện upsert vector vào Qdrant
+        client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=[
+                {
+                    "id": point_id,
+                    "vector": vector.tolist() if hasattr(vector, "tolist") else vector,
+                    "payload": metadata
+                }
+            ]
+        )
+    except Exception as e:
+        raise ValueError(f"Lỗi khi lưu vào Qdrant: {str(e)}")
+
     return point_id

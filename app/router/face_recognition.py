@@ -1,70 +1,43 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
-from PIL import Image
 import numpy as np
-import io
-from app.service.detect_face import detect_and_crop_face_np
-from app.service.extract_vector import extract_vector
-from app.config.settings import COLLECTION_NAME
-from app.utils.qdrant import client
+from PIL import Image
+from io import BytesIO
+from fastapi.responses import JSONResponse
+from app.service.face_recognize import face_recognize
+from app.service.save_face_to_qdrant import save_face_to_qdrant
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 
 router = APIRouter()
 
 
-@router.post("/upload", summary="Upload ảnh vào memory, convert sang numpy array")
-async def upload_image(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Chỉ nhận file ảnh!")
-
+@router.post("/save_qdrant", summary="Lưu vector khuôn mặt vào Qdrant")
+async def save_qdrant(image: UploadFile = File(...), user_id: str = Form(...)):
     try:
-        img_bytes = await file.read()
-        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        img_np = np.array(img)
+        # Đọc file ảnh
+        img_bytes = await image.read()
+        image = Image.open(BytesIO(img_bytes)).convert("RGB")
+        img_np = np.array(image)
 
-        return JSONResponse({"message": "Upload thành công! Đã convert sang numpy array."})
+        # Lưu ảnh vào Qdrant
+        result = await save_face_to_qdrant(img_np, user_id=user_id)
+        return JSONResponse({"success": True, "message": "Lưu thành công vào Qdrant", "result": result})
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Lỗi: {str(e)}")
 
 
-@router.post("/recognize", summary="Nhận diện khuôn mặt user")
-async def face_recognize(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Chỉ nhận file ảnh!")
-
+@router.post("/recognize", summary="Nhận diện khuôn mặt từ Qdrant")
+async def recognize(image: UploadFile = File(...)):
     try:
-        img_bytes = await file.read()
-        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        img_np = np.array(img)
+        # Đọc file ảnh
+        img_bytes = await image.read()
+        image = Image.open(BytesIO(img_bytes)).convert("RGB")
+        img_np = np.array(image)
 
-        # Detect & crop face
-        face_img = detect_and_crop_face_np(img_np)
-        if face_img is None:
-            raise HTTPException(status_code=404, detail="Không tìm thấy khuôn mặt trong ảnh.")
+        # Kiểm tra kích thước của img_np
+        if img_np.ndim != 3 or img_np.shape[2] != 3:
+            raise HTTPException(status_code=400, detail="Ảnh đầu vào không hợp lệ!")
 
-        # Extract embedding vector
-        face_vec = extract_vector(face_img)
-        if face_vec is None:
-            raise HTTPException(status_code=500, detail="Không thể trích xuất vector khuôn mặt.")
-
-        # Tìm vector gần nhất trong Qdrant
-        hits = client.search(
-            collection_name=COLLECTION_NAME,
-            query_vector=face_vec.tolist(),
-            limit=1
-        )
-
-        if not hits:
-            return JSONResponse({"message": "Không tìm thấy user trùng khớp."})
-
-        hit = hits[0]
-        user_info = hit.payload if hasattr(hit, "payload") else hit.get("payload", {})
-        score = hit.score if hasattr(hit, "score") else hit.get("score", None)
-
-        return JSONResponse({
-            "message": "Đã nhận diện, có user trùng khớp.",
-            "user": user_info,
-            "score": score
-        })
-
+        # Nhận diện khuôn mặt từ Qdrant
+        result = await face_recognize(img_np)
+        return JSONResponse({"success": True, "message": "Nhận diện thành công", "result": result})
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Lỗi nhận diện: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Lỗi: {str(e)}")

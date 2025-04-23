@@ -1,22 +1,22 @@
-from retinaface import RetinaFace
 import numpy as np
-from PIL import Image
+from retinaface import RetinaFace
 
 
 def detect_and_crop_face_np(img_np):
+    """
+    Nhận ảnh numpy array, detect & crop khuôn mặt đầu tiên, trả về ảnh khuôn mặt đã crop (numpy array RGB).
+    Nếu không phát hiện khuôn mặt, trả về None.
+    """
     if img_np is None or not isinstance(img_np, np.ndarray):
-        return None
+        return 'Không tìm thấy khuôn mặt'
 
-    results = RetinaFace.extract_faces(img_np, align=True)
+    try:
+        results = RetinaFace.extract_faces(img_np, align=True)
+    except Exception as e:
+        return f"Lỗi trong quá trình phát hiện khuôn mặt: {str(e)}"
 
-    if isinstance(results, dict) and len(results) > 0:
-        face_key = list(results.keys())[0]
-        facial_area = results[face_key]['facial_area']
-        x1, y1, x2, y2 = facial_area
-        face_crop = img_np[y1:y2, x1:x2]
-
-        face_pil = Image.fromarray(face_crop[..., ::-1])
-        return face_pil
-
+    if isinstance(results, list) and len(results) > 0:
+        face_crop = results[0]
+        return face_crop
     else:
         return None

@@ -1,0 +1,33 @@
+services:
+  fastapi_app:
+    build: .
+    container_name: face_recognition_app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant
+    environment:
+      - QDRANT_HOST=http://qdrant:6333
+    volumes:
+      - model_volume:/root/.deepface/weights
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant_face
+    ports:
+      - "6333:6333"
+    volumes:
+      - face_data_qdrant:/qdrant/storage
+
+volumes:
+  face_data_qdrant:
+    external: true
+  model_volume:
+    external: true
