@@ -1,22 +1,29 @@
 import numpy as np
-from retinaface import RetinaFace
+from deepface import DeepFace
+from app.config import settings
 
 
 def detect_and_crop_face_np(img_np):
-    """
-    Nhận ảnh numpy array, detect & crop khuôn mặt đầu tiên, trả về ảnh khuôn mặt đã crop (numpy array RGB).
-    Nếu không phát hiện khuôn mặt, trả về None.
-    """
-    if img_np is None or not isinstance(img_np, np.ndarray):
-        return 'Không tìm thấy khuôn mặt'
-
     try:
-        results = RetinaFace.extract_faces(img_np, align=True)
+        detection = DeepFace.extract_faces(
+            img_np,
+            detector_backend=settings.model_detect,
+            enforce_detection=True,
+            align=True
+        )
+        if detection and len(detection) > 0:
+            face_info = detection[0]
+            face_crop = face_info["face"]
+            # Kiểm tra kích thước crop và kiểu dữ liệu
+            if (
+                    not isinstance(face_crop, np.ndarray) or
+                    face_crop.shape[0] < 10 or face_crop.shape[1] < 10
+            ):
+                return "Khuôn mặt được crop quá nhỏ hoặc không hợp lệ"
+            if face_crop.dtype != np.uint8:
+                face_crop = np.clip(face_crop, 0, 255).astype(np.uint8)
+            return face_crop
+        else:
+            return "Không tìm thấy khuôn mặt"
     except Exception as e:
-        return f"Lỗi trong quá trình phát hiện khuôn mặt: {str(e)}"
-
-    if isinstance(results, list) and len(results) > 0:
-        face_crop = results[0]
-        return face_crop
-    else:
-        return None
+        return f"Lỗi DeepFace detect: {str(e)}"
