@@ -8,5 +8,5 @@ model_name = 'ArcFace'
 # model_name = 'FaceNet'
 DISTANCE_METRIC = "cosine"
 
-threshold = 0.75
+threshold = 0.65
 shape = (112, 112, 3)

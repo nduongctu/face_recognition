@@ -1,4 +1,5 @@
 import uuid
+import numpy as np
 from app.utils.qdrant import client
 from app.config.settings import COLLECTION_NAME
 from app.service.extract_vector import extract_vector
@@ -20,17 +21,18 @@ async def save_face_to_qdrant(img_np, user_id):
     # Trích xuất vector từ ảnh
     vector = await extract_vector(img_np)
 
-    if vector is None or len(vector) == 0:
+    # Kiểm tra kỹ kiểu dữ liệu vector, chỉ nhận numpy.ndarray hoặc list số thực
+    if isinstance(vector, str):
+        raise ValueError(f"Lỗi khi trích xuất vector khuôn mặt: {vector}")
+    if vector is None or (hasattr(vector, '__len__') and len(vector) == 0):
         raise ValueError("Không trích xuất được vector khuôn mặt!")
+    if not (isinstance(vector, (np.ndarray, list))):
+        raise ValueError("Kết quả trích xuất vector không hợp lệ!")
 
-    # Metadata kèm theo user_id
     metadata = {"user_id": user_id}
-
-    # Tạo ID duy nhất cho vector
     point_id = str(uuid.uuid4())
 
     try:
-        # Thực hiện upsert vector vào Qdrant
         client.upsert(
             collection_name=COLLECTION_NAME,
             points=[
