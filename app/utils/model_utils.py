@@ -1,10 +1,10 @@
 import insightface
 from insightface.model_zoo import model_zoo
 
-det_model_path = 'det_10g.onnx'
-rec_model_path = 'w600k_r50.onnx'
+DET_MODEL_PATH = "/root/.insightface/models/det_10g.onnx"
+REC_MODEL_PATH = "/root/.insightface/models/w600k_r50.onnx"
 
-det_model = model_zoo.get_model(f'app/weights/{det_model_path}')
-rec_model = model_zoo.get_model(f'app/weights/{rec_model_path}')
+det_model = model_zoo.get_model(DET_MODEL_PATH)
+rec_model = model_zoo.get_model(REC_MODEL_PATH)
 
-det_model.prepare(ctx_id=0, input_size=(640, 640), det_thres=0.8)
+det_model.prepare(ctx_id=0, input_size=(640, 640))

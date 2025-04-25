@@ -22,7 +22,6 @@ def _extract_single(idx, bbox_resize, det_score, kps, img_resize, pad_w, pad_h, 
     embedding = face.normed_embedding
     if embedding is not None:
         return {
-            "bbox_resize": bbox_resize,
             "bbox": bbox_orig,  # bbox gốc trên ảnh ban đầu
             "embedding": embedding.tolist()
         }

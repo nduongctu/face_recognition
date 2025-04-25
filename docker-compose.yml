@@ -8,6 +8,8 @@ services:
       - qdrant
     environment:
       - QDRANT_HOST=http://qdrant:6333
+    volumes:
+      - model_insightface:/root/.insightface/models
     deploy:
       resources:
         reservations:
@@ -26,4 +28,6 @@ services:
 
 volumes:
   face_data_qdrant:
+    external: true
+  model_insightface:
     external: true
