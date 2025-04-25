@@ -10,7 +10,7 @@ async def save_face_to_qdrant(img_np, user_id):
     Nhận ảnh đầu vào (np.array), trích xuất vector và lưu vào Qdrant kèm theo user_id.
     :param img_np: Ảnh đầu vào dạng numpy array (RGB)
     :param user_id: ID người dùng cần lưu
-    :return: ID của vector đã lưu (uuid)
+    :return: Danh sách ID của các vector đã lưu (uuid)
     """
     if img_np is None:
         raise ValueError("Thiếu ảnh đầu vào!")
@@ -18,32 +18,37 @@ async def save_face_to_qdrant(img_np, user_id):
     if not user_id:
         raise ValueError("Thiếu user_id!")
 
-    # Trích xuất vector từ ảnh
-    vector = await extract_vector(img_np)
+    # Trích xuất list vector từ ảnh
+    face_list = extract_vector(img_np)
 
-    # Kiểm tra kỹ kiểu dữ liệu vector, chỉ nhận numpy.ndarray hoặc list số thực
-    if isinstance(vector, str):
-        raise ValueError(f"Lỗi khi trích xuất vector khuôn mặt: {vector}")
-    if vector is None or (hasattr(vector, '__len__') and len(vector) == 0):
-        raise ValueError("Không trích xuất được vector khuôn mặt!")
-    if not (isinstance(vector, (np.ndarray, list))):
-        raise ValueError("Kết quả trích xuất vector không hợp lệ!")
+    if isinstance(face_list, str):
+        raise ValueError(f"Lỗi khi trích xuất vector khuôn mặt: {face_list}")
+    if face_list is None or len(face_list) == 0:
+        raise ValueError("Không trích xuất được vector khuôn mặt nào!")
 
-    metadata = {"user_id": user_id}
-    point_id = str(uuid.uuid4())
+    ids = []
+    points = []
+    for item in face_list:
+        embedding = item.get("embedding")
+        if embedding is None or not isinstance(embedding, (np.ndarray, list)):
+            continue
+        point_id = str(uuid.uuid4())
+        points.append({
+            "id": point_id,
+            "vector": embedding if isinstance(embedding, list) else embedding.tolist(),
+            "payload": {"user_id": user_id}
+        })
+        ids.append(point_id)
+
+    if not points:
+        raise ValueError("Không có vector embedding hợp lệ để lưu!")
 
     try:
         client.upsert(
             collection_name=COLLECTION_NAME,
-            points=[
-                {
-                    "id": point_id,
-                    "vector": vector.tolist() if hasattr(vector, "tolist") else vector,
-                    "payload": metadata
-                }
-            ]
+            points=points
         )
     except Exception as e:
         raise ValueError(f"Lỗi khi lưu vào Qdrant: {str(e)}")
 
-    return point_id
+    return ids
