@@ -1,8 +1,9 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
 
-WORKDIR /app
-
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
     libglib2.0-0 \
     libsm6 \
     libxrender1 \
@@ -11,9 +12,11 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
+WORKDIR /app
+
 COPY requirements.txt .
-RUN pip install --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --upgrade pip \
+ && pip3 install --no-cache-dir -r requirements.txt
 
 COPY . /app
 

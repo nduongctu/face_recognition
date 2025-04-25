@@ -19,7 +19,7 @@ async def save_qdrant(image: UploadFile = File(...), user_id: str = Form(...)):
 
         # Lưu ảnh vào Qdrant
         result = await save_face_to_qdrant(img_np, user_id=user_id)
-        return JSONResponse({"success": True, "message": "Lưu thành công vào Qdrant", "result": result})
+        return JSONResponse({"success": True, "message": "Lưu thành công vào Qdrant"})
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Lỗi: {str(e)}")
 

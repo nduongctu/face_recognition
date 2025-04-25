@@ -8,3 +8,4 @@ det_model = model_zoo.get_model(DET_MODEL_PATH)
 rec_model = model_zoo.get_model(REC_MODEL_PATH)
 
 det_model.prepare(ctx_id=0, input_size=(640, 640))
+rec_model.prepare(ctx_id=0)
