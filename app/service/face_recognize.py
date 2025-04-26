@@ -35,7 +35,7 @@ async def face_recognize(img_np, top_k=1, score_threshold=threshold):
 
         embedding = face.get("embedding")
         if embedding is None:
-            results.append({"bbox": bbox, "detail": "Đang xử lý..."})
+            results.append({"bbox": bbox, "detail": "Không tìm thấy người phù hợp"})
             continue
 
         # Chỉ truy vấn Qdrant cho khuôn mặt chưa nhận diện hoặc chưa báo cáo
