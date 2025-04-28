@@ -6,8 +6,14 @@ services:
       - "8000:8000"
     depends_on:
       - qdrant
+      - postgres
     environment:
       - QDRANT_HOST=http://qdrant:6333
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - model_insightface:/root/.insightface/models
     deploy:
@@ -26,8 +32,43 @@ services:
     volumes:
       - face_data_qdrant:/qdrant/storage
 
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - /etc/localtime:/etc/localtime:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "effective_cache_size=768MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "checkpoint_timeout=15min"
+      - "-c"
+      - "random_page_cost=1.1"
+
 volumes:
   face_data_qdrant:
     external: true
   model_insightface:
+    external: true
+  postgres_data:
     external: true

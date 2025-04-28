@@ -1,34 +1,69 @@
 import numpy as np
 from PIL import Image
 from io import BytesIO
+from app.utils.postgres import *
+from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
 from app.service.face_recognize import face_recognize
 from app.service.save_face_to_qdrant import save_face_to_qdrant
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Request
 
 router = APIRouter()
 
 
 @router.post("/save_qdrant", summary="Lưu vector khuôn mặt vào Qdrant")
-async def save_qdrant(image: UploadFile = File(...), user_id: str = Form(...)):
+async def save_qdrant(
+        frontal: UploadFile = File(...),
+        up: UploadFile = File(...),
+        left: UploadFile = File(...),
+        right: UploadFile = File(...),
+        user_id: str = Form(...),
+):
     try:
-        # Đọc file ảnh
-        img_bytes = await image.read()
-        image = Image.open(BytesIO(img_bytes)).convert("RGB")
-        img_np = np.array(image)
+        # Kiểm tra xem tất cả ảnh đã được tải lên hay chưa
+        if not all([frontal, up, left, right]):
+            raise HTTPException(status_code=400, detail="Cần đủ 4 ảnh (frontal, up, left, right)!")
 
-        # Lưu ảnh vào Qdrant
-        result = await save_face_to_qdrant(img_np, user_id=user_id)
-        return JSONResponse({"success": True, "message": "Lưu thành công vào Qdrant"})
+        # Tạo dictionary cho các ảnh và kiểm tra định dạng
+        upload_files = {"frontal": frontal, "up": up, "left": left, "right": right}
+        images_np = {}
+
+        # Đọc và xử lý các tệp ảnh
+        for pose, file in upload_files.items():
+            try:
+                img_bytes = await file.read()
+                img = Image.open(BytesIO(img_bytes)).convert("RGB")
+                images_np[pose] = np.array(img)
+
+                # Kiểm tra ảnh có đúng định dạng
+                if images_np[pose].ndim != 3 or images_np[pose].shape[2] != 3:
+                    raise ValueError(f"Ảnh {pose} không đúng định dạng RGB")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Lỗi xử lý ảnh {pose}: {str(e)}")
+
+        # Lưu mỗi ảnh vào Qdrant với user_id và pose
+        results = {}
+        for pose, img_np in images_np.items():
+            results[pose] = await save_face_to_qdrant(img_np, user_id=user_id, pose=pose)
+
+        return JSONResponse({
+            "success": True,
+            "message": "Lưu thành công vào Qdrant",
+            "results": results
+        })
+
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Lỗi: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi hệ thống: {str(e)}")
 
 
 @router.post("/recognize", summary="Nhận diện khuôn mặt từ Qdrant")
-async def recognize(image: UploadFile = File(...)):
+async def recognize_face(file: UploadFile = File(...), request: Request = None):
+    """Nhận diện khuôn mặt từ ảnh gửi lên"""
     try:
         # Đọc file ảnh
-        img_bytes = await image.read()
+        img_bytes = await file.read()
         image = Image.open(BytesIO(img_bytes)).convert("RGB")
         img_np = np.array(image)
 
@@ -36,8 +71,8 @@ async def recognize(image: UploadFile = File(...)):
         if img_np.ndim != 3 or img_np.shape[2] != 3:
             raise HTTPException(status_code=400, detail="Ảnh đầu vào không hợp lệ!")
 
-        # Nhận diện khuôn mặt từ Qdrant
-        result = await face_recognize(img_np)
+        # Gọi hàm nhận diện khuôn mặt với truyền vào app để truy cập database
+        result = await face_recognize(request.app, img_np)
         return JSONResponse({"success": True, "message": "Nhận diện thành công", "result": result})
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Lỗi: {str(e)}")
+        return {"detail": f"Lỗi khi xử lý ảnh: {str(e)}"}

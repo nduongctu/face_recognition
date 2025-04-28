@@ -1,5 +1,4 @@
 qdrant-client
-retina-face
 fastapi
 uvicorn
 python-multipart
@@ -7,3 +6,5 @@ insightface
 opencv-python
 numpy
 onnxruntime-gpu
+asyncpg
+databases
