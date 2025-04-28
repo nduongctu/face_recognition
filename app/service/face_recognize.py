@@ -29,7 +29,7 @@ async def face_recognize(img_np, top_k=1, score_threshold=threshold):
             continue
 
         # Kiểm tra nếu khuôn mặt đã báo cáo là không tìm thấy người phù hợp
-        if face.get("reported", False) and face.get("frame_count", 0) >= 30:
+        if face.get("reported", False) and face.get("frame_count", 0) >= 10:
             results.append({"bbox": bbox, "detail": "Không tìm thấy người phù hợp"})
             continue
 
@@ -38,18 +38,19 @@ async def face_recognize(img_np, top_k=1, score_threshold=threshold):
             results.append({"bbox": bbox, "detail": "Không tìm thấy người phù hợp"})
             continue
 
-        # Chỉ truy vấn Qdrant cho khuôn mặt chưa nhận diện hoặc chưa báo cáo
         try:
-            search_result = client.search(
+            search_result = client.search_groups(
                 collection_name=COLLECTION_NAME,
                 query_vector=embedding,
                 limit=top_k,
+                group_by="user_id",
+                group_size=1,
                 with_payload=True,
                 score_threshold=score_threshold,
             )
 
             if not search_result or len(search_result) == 0:
-                if face.get("frame_count", 0) >= 30:
+                if face.get("frame_count", 0) >= 10:
                     results.append({"bbox": bbox, "detail": "Không tìm thấy người phù hợp"})
                 else:
                     results.append({"bbox": bbox, "detail": f"Đang xử lý..."})

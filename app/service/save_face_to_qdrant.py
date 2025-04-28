@@ -5,9 +5,9 @@ from app.config.settings import COLLECTION_NAME
 from app.service.extract_vector_save_qdrant import extract_vector
 
 
-async def save_face_to_qdrant(img_np, user_id):
+async def save_face_to_qdrant(img_np, user_id, pose):
     """
-    Nhận ảnh đầu vào (np.array), trích xuất vector và lưu vào Qdrant kèm theo user_id.
+    Nhận ảnh đầu vào (np.array), trích xuất vector và lưu vào Qdrant kèm theo user_id và pose.
     Thông báo thành công/thất bại.
     """
     if img_np is None:
@@ -15,6 +15,9 @@ async def save_face_to_qdrant(img_np, user_id):
 
     if not user_id:
         raise ValueError("Thiếu user_id!")
+
+    if not pose:
+        raise ValueError("Thiếu pose!")
 
     item = extract_vector(img_np)
     if isinstance(item, str):
@@ -29,7 +32,10 @@ async def save_face_to_qdrant(img_np, user_id):
     point = {
         "id": str(uuid.uuid4()),
         "vector": embedding if isinstance(embedding, list) else embedding.tolist(),
-        "payload": {"user_id": user_id}
+        "payload": {
+            "user_id": user_id,
+            "pose": pose
+        }
     }
 
     try:
@@ -40,4 +46,4 @@ async def save_face_to_qdrant(img_np, user_id):
     except Exception as e:
         raise ValueError(f"Lỗi khi lưu vào Qdrant: {str(e)}")
 
-    return
+    return {"message": "Lưu thành công"}

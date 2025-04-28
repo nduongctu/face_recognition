@@ -3,7 +3,7 @@ import numpy as np
 import insightface
 from insightface.app.common import Face
 from app.utils.preprocess import resize_with_padding
-from app.utils.model_utils import det_model, rec_model
+from app.utils.model import det_model, rec_model
 
 
 def extract_vector(img_np, det_thresh=0.6):
