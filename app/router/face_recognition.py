@@ -58,11 +58,14 @@ async def save_qdrant(
         raise HTTPException(status_code=500, detail=f"Lỗi hệ thống: {str(e)}")
 
 
-@router.post("/recognize", summary="Nhận diện khuôn mặt từ Qdrant")
-async def recognize_face(file: UploadFile = File(...), request: Request = None):
-    """Nhận diện khuôn mặt từ ảnh gửi lên"""
+@router.post("/recognize")
+async def recognize_face(
+        file: UploadFile = File(...),  # Nhận tệp ảnh
+        frame_idx: int = Form(...),  # Nhận frame_idx dưới dạng integer
+        request: Request = None
+):
     try:
-        # Đọc file ảnh
+        # Kiểm tra và chuyển đổi ảnh từ file
         img_bytes = await file.read()
         image = Image.open(BytesIO(img_bytes)).convert("RGB")
         img_np = np.array(image)
@@ -71,8 +74,9 @@ async def recognize_face(file: UploadFile = File(...), request: Request = None):
         if img_np.ndim != 3 or img_np.shape[2] != 3:
             raise HTTPException(status_code=400, detail="Ảnh đầu vào không hợp lệ!")
 
-        # Gọi hàm nhận diện khuôn mặt với truyền vào app để truy cập database
-        result = await face_recognize(request.app, img_np)
+        # Tiến hành nhận diện và trả kết quả
+        result = await face_recognize(request.app, img_np, frame_idx)
+
         return JSONResponse({"success": True, "message": "Nhận diện thành công", "result": result})
     except Exception as e:
         return {"detail": f"Lỗi khi xử lý ảnh: {str(e)}"}
