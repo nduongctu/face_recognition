@@ -1,18 +1,19 @@
 -- Tạo bảng lưu kết quả nhận dạng
 CREATE TABLE IF NOT EXISTS recognize_results
 (
-    result_id SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    bbox JSONB NOT NULL,
-    detection_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    confidence FLOAT
+    result_id      SERIAL PRIMARY KEY,
+    user_id        TEXT        NOT NULL,
+    bbox           JSONB       NOT NULL,
+    detection_time TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+    confidence     FLOAT,
+    object_name    TEXT
 );
 
 -- Tạo bảng lưu ảnh khuôn mặt
 CREATE TABLE IF NOT EXISTS face_frames
 (
-    frame_id SERIAL PRIMARY KEY,
-    result_id INTEGER REFERENCES recognize_results(result_id) ON DELETE CASCADE,
+    frame_id  SERIAL PRIMARY KEY,
+    result_id INTEGER REFERENCES recognize_results (result_id) ON DELETE CASCADE,
     idx_frame INTEGER NOT NULL
 );
 
@@ -20,15 +21,15 @@ CREATE TABLE IF NOT EXISTS face_frames
 CREATE TABLE IF NOT EXISTS user_presence
 (
     presence_id SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    entry_time TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    exit_time TIMESTAMPTZ,
-    is_active BOOLEAN DEFAULT TRUE
+    user_id     TEXT        NOT NULL,
+    entry_time  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    exit_time   TIMESTAMPTZ,
+    is_active   BOOLEAN              DEFAULT TRUE
 );
 
 -- Tạo các indexes cho tối ưu hiệu suất
-CREATE INDEX IF NOT EXISTS idx_recognize_user_time ON recognize_results(user_id, detection_time);
-CREATE INDEX IF NOT EXISTS idx_user_presence_active ON user_presence(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_recognize_user_time ON recognize_results (user_id, detection_time);
+CREATE INDEX IF NOT EXISTS idx_user_presence_active ON user_presence (user_id, is_active);
 
 -- -- Tạo function để lọc trùng lặp
 -- CREATE OR REPLACE FUNCTION filter_duplicate_detections()

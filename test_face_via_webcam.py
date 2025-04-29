@@ -31,8 +31,8 @@ while True:
 
     # Gửi ảnh và frame_idx lên API
     _, jpg_img = cv2.imencode('.jpg', frame)
-    files = {'file': ('frame.jpg', jpg_img.tobytes(), 'image/jpeg')}  # Sửa thành 'file' thay vì 'image'
-    data = {'frame_idx': str(frame_idx)}  # Đảm bảo frame_idx là kiểu string
+    files = {'file': ('frame.jpg', jpg_img.tobytes(), 'image/jpeg')}
+    data = {'frame_idx': frame_idx}
 
     try:
         resp = requests.post(API_URL, files=files, data=data, timeout=5)
