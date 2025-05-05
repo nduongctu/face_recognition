@@ -1,11 +1,12 @@
 import os
-import uuid
 import boto3
+import uuid
 import numpy as np
 from PIL import Image
 from io import BytesIO
 from dotenv import load_dotenv
 from botocore.exceptions import NoCredentialsError
+from concurrent.futures import ThreadPoolExecutor
 
 # Load các biến từ file .env
 load_dotenv()
@@ -25,8 +26,11 @@ r2_client = boto3.client(
     region_name='auto'
 )
 
+# Tạo thread pool để xử lý bất đồng bộ
+executor = ThreadPoolExecutor(max_workers=4)
 
-async def upload_face_crop_to_r2(face_crop: np.ndarray, user_id: str, frame_idx: int) -> str:
+
+def upload_face_crop_to_r2(face_crop: np.ndarray, user_id: str, frame_idx: int) -> str:
     try:
         # Chuyển numpy array thành PIL Image
         pil_img = Image.fromarray(face_crop)
@@ -36,13 +40,19 @@ async def upload_face_crop_to_r2(face_crop: np.ndarray, user_id: str, frame_idx:
         pil_img.save(buffer, format='JPEG')
         buffer.seek(0)
 
-        # Sinh UUID và tạo object_name duy nhất
         unique_id = uuid.uuid4().hex
-        object_name = f"{user_id}_{frame_idx}_{unique_id}.jpg"
+        object_name = f"face-recognize/user_{user_id}_frame_{frame_idx}_{unique_id}.jpg"
 
-        # Upload lên R2
-        r2_client.upload_fileobj(buffer, bucket_name, object_name)
+        def upload_to_r2():
+            try:
+                r2_client.upload_fileobj(buffer, bucket_name, object_name)
+            except Exception as e:
+                print(f"Lỗi khi upload ảnh lên R2: {e}")
 
+        # Gọi hàm upload trong thread riêng biệt
+        executor.submit(upload_to_r2)
+
+        # Trả về object_name ngay lập tức
         return object_name
 
     except NoCredentialsError:

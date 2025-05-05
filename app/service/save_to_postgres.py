@@ -20,6 +20,7 @@ async def save_to_postgres(app, user_id, bbox, confidence, frame_idx, object_nam
                 # Kiểm tra nếu result_id có giá trị (không bị lọc bởi trigger)
                 if result_id:
                     # Lưu frame_idx vào bảng face_frames
+                    # frame_id = uuid.uuid1(node=cam_id.int >> 64)  # Dùng 64 bit đầu của cam_id làm node cho UUID1
                     await conn.execute('''
                                        INSERT INTO face_frames(result_id, idx_frame)
                                        VALUES ($1, $2)

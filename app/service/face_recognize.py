@@ -41,7 +41,7 @@ async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=thresh
         if user_id:
             results.append({"user_id": user_id, "bbox": normalized_bbox})
 
-            object_name = await upload_face_crop_to_r2(face_crop, user_id, frame_idx)
+            object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
             await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, object_name)
             continue
 
@@ -78,7 +78,7 @@ async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=thresh
                 face["is_identified"] = True
                 results.append({"user_id": user_id, "bbox": normalized_bbox})
 
-                object_name = await upload_face_crop_to_r2(face_crop, user_id, frame_idx)
+                object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
                 await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, object_name)
             else:
                 results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
