@@ -13,7 +13,7 @@ async def save_to_postgres(app, user_id, bbox, confidence, frame_idx, object_nam
 
                 # Thêm kết quả nhận dạng vào bảng recognize_results
                 result_id = await conn.fetchval('''
-                                                INSERT INTO recognize_results(user_id, bbox, confidence, image_r2)
+                                                INSERT INTO recognize_results(user_id, bbox, confidence, object_name)
                                                 VALUES ($1, $2, $3, $4) RETURNING result_id
                                                 ''', user_id, bbox_json, confidence, object_name)
 
