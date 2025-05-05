@@ -3,12 +3,12 @@ import numpy as np
 import insightface
 from insightface.app.common import Face
 from app.service.fas_model import is_real_face
-from app.utils.preprocess import resize_with_padding
 from app.utils.model import det_model, rec_model
 from concurrent.futures import ThreadPoolExecutor
+from app.utils.preprocess import resize_with_padding, expand_bbox_px
 
 tracked_faces = []
-IOU_THRESHOLD = 0.5
+IOU_THRESHOLD = 0.3
 MAX_FRAME_MISS = 15
 
 
@@ -34,7 +34,9 @@ def _extract_single(idx, bbox_resize, det_score, kps, img_resize, pad_w, pad_h, 
     y2 = min((y2 - pad_h) / scale, orig_h)
     bbox_orig = [int(x1), int(y1), int(x2), int(y2)]
 
-    face = Face(bbox=bbox_resize, kps=kps, det_score=det_score)
+    bbox_resize_expanded = expand_bbox_px(bbox_resize, 4, img_resize.shape[1], img_resize.shape[0])
+
+    face = Face(bbox=bbox_resize_expanded, kps=kps, det_score=det_score)
     rec_model.get(img_resize, face)
     embedding = face.normed_embedding
     if embedding is not None:
@@ -64,7 +66,6 @@ def extract_vector(img_np, det_thresh=0.6):
         # Không thấy mặt nào => chỉ tăng frame_miss
         for tracked in tracked_faces:
             tracked["frame_miss"] = tracked.get("frame_miss", 0) + 1
-            # Không tăng frame_count ở đây!
 
         # Cập nhật tracked_faces
         tracked_faces = [
@@ -83,7 +84,6 @@ def extract_vector(img_np, det_thresh=0.6):
             detail = None
             if t.get("user_id") is None and t.get("frame_count", 0) >= 30:
                 detail = "Không tìm thấy người phù hợp"
-                # Đánh dấu đã báo cáo nếu chưa
                 if not t.get("reported", False):
                     t["reported"] = True
 
@@ -111,6 +111,7 @@ def extract_vector(img_np, det_thresh=0.6):
             continue
         bbox_resize = bboxes[idx, :4].astype(int).tolist()
         kps = kpss[idx]
+
         x1 = max((bbox_resize[0] - pad_w) / scale, 0)
         y1 = max((bbox_resize[1] - pad_h) / scale, 0)
         x2 = min((bbox_resize[2] - pad_w) / scale, orig_w)
@@ -140,14 +141,12 @@ def extract_vector(img_np, det_thresh=0.6):
                 matched = True
                 matched_indices.add(tidx)
 
-                # Xác định chi tiết nếu cần
                 detail = None
                 if not is_identified and frame_count >= 30:
                     detail = "Không tìm thấy người phù hợp"
                     if not new_t["reported"]:
                         new_t["reported"] = True
 
-                # Thêm khuôn mặt vào danh sách trả về (luôn trả về mọi khuôn mặt)
                 faces_to_return.append({
                     "bbox": bbox_orig,
                     "embedding": tracked.get("embedding"),
@@ -197,16 +196,6 @@ def extract_vector(img_np, det_thresh=0.6):
                     if face["bbox"] == ret["bbox_orig"] and face["embedding"] is None:
                         face["embedding"] = ret["embedding"]
                         break
-
-    # Xử lý các khuôn mặt đã tracked nhưng không phát hiện trong frame hiện tại
-    for tidx, tracked in enumerate(tracked_faces):
-        if tidx not in matched_indices:
-            t_miss = tracked.copy()
-            t_miss["frame_miss"] = t_miss.get("frame_miss", 0) + 1
-            # frame_count KHÔNG tăng nữa ở đây!
-            if t_miss.get("user_id") is not None:
-                t_miss["is_identified"] = True
-            new_tracked.append(t_miss)
 
     # Cập nhật trạng thái identified
     for t in new_tracked:

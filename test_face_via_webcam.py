@@ -27,7 +27,7 @@ while True:
         break
 
     frame_count += 1
-    frame_idx += 1  # Tăng frame_idx
+    frame_idx += 1
 
     # Gửi ảnh và frame_idx lên API
     _, jpg_img = cv2.imencode('.jpg', frame)

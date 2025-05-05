@@ -53,3 +53,12 @@ def normalize_bbox(bbox, img_width, img_height):
         y_max / img_height
     ]
     return normalized_bbox
+
+
+def expand_bbox_px(bbox, expand_px, img_w, img_h):
+    x1, y1, x2, y2 = bbox
+    x1 = max(x1 - expand_px, 0)
+    y1 = max(y1 - expand_px, 0)
+    x2 = min(x2 + expand_px, img_w)
+    y2 = min(y2 + expand_px, img_h)
+    return [x1, y1, x2, y2]

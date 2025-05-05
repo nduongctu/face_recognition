@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 import insightface
 from insightface.app.common import Face
-from app.utils.preprocess import resize_with_padding
 from app.utils.model import det_model, rec_model
+from app.utils.preprocess import resize_with_padding, expand_bbox_px
 
 
 def extract_vector(img_np, det_thresh=0.6):
@@ -23,7 +23,6 @@ def extract_vector(img_np, det_thresh=0.6):
     if bboxes is None or len(bboxes) == 0:
         return None
 
-    # Tìm bbox có det_score lớn nhất và đủ threshold
     scores = bboxes[:, 4]
     mask = scores >= det_thresh
     if not np.any(mask):
@@ -34,7 +33,8 @@ def extract_vector(img_np, det_thresh=0.6):
     bbox_resize = bboxes[idx_max, :4].astype(int).tolist()
     kps = kpss[idx_max]
 
-    # Lấy bbox trên ảnh gốc
+    bbox_resize = expand_bbox_px(bbox_resize, 4, img_resize.shape[1], img_resize.shape[0])
+
     x1, y1, x2, y2 = bbox_resize
     x1 = max((x1 - pad_w) / scale, 0)
     y1 = max((y1 - pad_h) / scale, 0)
