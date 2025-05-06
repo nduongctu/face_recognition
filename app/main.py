@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from app.utils.postgres import *
-from app.router import face_recognition
+from app.router import face_recognition, report
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -16,19 +16,18 @@ app.add_middleware(
 )
 
 
-# Kết nối tới PostgreSQL khi ứng dụng khởi động
 @app.on_event("startup")
-async def startup_db():
-    app.db = await connect_to_db()  # Kết nối PostgreSQL
+async def on_startup():
+    await init_db_pool()
 
 
-# Ngắt kết nối khi ứng dụng tắt
 @app.on_event("shutdown")
-async def shutdown_db():
-    await close_db_connection(app.db)  # Đóng kết nối PostgreSQL
+async def on_shutdown():
+    await close_db_pool()
 
 
 app.include_router(face_recognition.router, prefix="/face", tags=["Face Recognition"])
+app.include_router(report.router, prefix="/report", tags=["Report"])
 
 if __name__ == "__main__":
     import uvicorn

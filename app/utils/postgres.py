@@ -1,6 +1,9 @@
 import os
 import asyncpg
-from datetime import datetime
+from typing import Optional
+
+# Biến toàn cục để giữ pool
+_pool: Optional[asyncpg.Pool] = None
 
 # Lấy thông tin kết nối từ biến môi trường
 DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
@@ -10,9 +13,10 @@ DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
 DB_NAME = os.getenv("POSTGRES_DB", "face_recognition")
 
 
-async def connect_to_db():
-    try:
-        pool = await asyncpg.create_pool(
+async def init_db_pool():
+    global _pool
+    if _pool is None:
+        _pool = await asyncpg.create_pool(
             host=DB_HOST,
             port=DB_PORT,
             user=DB_USER,
@@ -22,20 +26,16 @@ async def connect_to_db():
             max_size=20
         )
         print(f"Đã kết nối đến PostgreSQL tại {DB_HOST}:{DB_PORT}")
-        return pool
-    except Exception as e:
-        print(f"Lỗi kết nối đến PostgreSQL: {e}")
-        raise
 
 
-async def close_db_connection(pool):
-    await pool.close()
+async def close_db_pool():
+    global _pool
+    if _pool:
+        await _pool.close()
+        _pool = None
 
 
-async def cleanup_old_face_data(app):
-    try:
-        async with app.db.acquire() as conn:
-            await conn.execute("SELECT cleanup_old_face_data()")
-            print(f"Đã dọn dẹp dữ liệu thành công lúc {datetime.now()}")
-    except Exception as e:
-        print(f"Lỗi khi dọn dẹp dữ liệu: {e}")
+def get_db_pool() -> asyncpg.Pool:
+    if _pool is None:
+        raise RuntimeError("Database pool has not been initialized.")
+    return _pool
