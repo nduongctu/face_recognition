@@ -4,5 +4,5 @@ COLLECTION_NAME = "face_recognition"
 VECTOR_SIZE = 512
 DISTANCE_METRIC = "cosine"
 SESSION_TIMEOUT = 300
-threshold = 0.5
+threshold = 0.45
 shape = (112, 112, 3)

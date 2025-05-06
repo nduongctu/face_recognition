@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import insightface
 from insightface.app.common import Face
+from app.utils.align_face import align_face
 from app.service.fas_model import is_real_face
 from app.utils.model import det_model, rec_model
 from concurrent.futures import ThreadPoolExecutor
@@ -36,8 +37,9 @@ def _extract_single(idx, bbox_resize, det_score, kps, img_resize, pad_w, pad_h, 
 
     bbox_resize_expanded = expand_bbox_px(bbox_resize, 4, img_resize.shape[1], img_resize.shape[0])
 
+    aligned_face_img = align_face(img_resize, kps)
     face = Face(bbox=bbox_resize_expanded, kps=kps, det_score=det_score)
-    rec_model.get(img_resize, face)
+    rec_model.get(aligned_face_img, face)
     embedding = face.normed_embedding
     if embedding is not None:
         return {

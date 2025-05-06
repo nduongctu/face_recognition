@@ -2,7 +2,7 @@ import uuid
 import numpy as np
 from app.utils.qdrant import client
 from app.config.settings import COLLECTION_NAME
-from app.service.extract_vector_save_qdrant import extract_vector
+from app.service.extract_vector_save_qdrant import extract_vector, extract_vector_align
 
 
 async def save_face_to_qdrant(img_np, user_id, pose):
@@ -19,7 +19,11 @@ async def save_face_to_qdrant(img_np, user_id, pose):
     if not pose:
         raise ValueError("Thiếu pose!")
 
-    item = extract_vector(img_np)
+    if pose in ["frontal", "up"]:
+        item = extract_vector_align(img_np)
+    else:
+        item = extract_vector(img_np)
+
     if isinstance(item, str):
         raise ValueError(f"Lỗi khi trích xuất vector khuôn mặt: {item}")
     if item is None or item.get("embedding") is None:
