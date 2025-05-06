@@ -61,6 +61,7 @@ async def save_qdrant(
 @router.post("/recognize")
 async def recognize_face(
         file: UploadFile = File(...),  # Nhận tệp ảnh
+        cam_id: str = Form(...),  # Nhận cam_id (UUID4)
         frame_idx: int = Form(...),  # Nhận frame_idx dưới dạng integer
         request: Request = None
 ):
@@ -75,7 +76,7 @@ async def recognize_face(
             raise HTTPException(status_code=400, detail="Ảnh đầu vào không hợp lệ!")
 
         # Tiến hành nhận diện và trả kết quả
-        result = await face_recognize(request.app, img_np, frame_idx)
+        result = await face_recognize(request.app, cam_id, img_np, frame_idx)
 
         return JSONResponse({"success": True, "message": "Nhận diện thành công", "result": result})
     except Exception as e:

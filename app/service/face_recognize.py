@@ -16,7 +16,7 @@ vn_timezone = pytz.timezone("Asia/Ho_Chi_Minh")
 vn_time = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
 
 
-async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=threshold):
+async def face_recognize(app, cam_id, img_np, frame_idx, top_k=1, score_threshold=threshold):
     """ Nhận diện nhiều khuôn mặt: trả về danh sách user_id hoặc thông báo cho mỗi khuôn mặt trong ảnh (kèm bbox).
     Chỉ lưu vào PostgreSQL và R2 nếu nhận dạng được người dùng. """
     face_list = extract_vector(img_np)
@@ -48,7 +48,7 @@ async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=thresh
             results.append({"user_id": user_id, "bbox": normalized_bbox})
 
             object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-            await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, vn_time, object_name)
+            await save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
             continue
 
         if face.get("reported", False) and face.get("frame_count", 0) >= 8:
@@ -85,7 +85,8 @@ async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=thresh
                 results.append({"user_id": user_id, "bbox": normalized_bbox})
 
                 object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-                await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, vn_time, object_name)
+                await save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time,
+                                       object_name)
             else:
                 results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
 

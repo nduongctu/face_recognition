@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS recognize_results
 -- Tạo bảng lưu ảnh khuôn mặt
 CREATE TABLE IF NOT EXISTS face_frames
 (
-    frame_id  SERIAL PRIMARY KEY,
+    frame_id  UUID PRIMARY KEY,
     result_id INTEGER REFERENCES recognize_results (result_id) ON DELETE CASCADE,
     idx_frame INTEGER NOT NULL
 );
@@ -21,10 +21,10 @@ CREATE TABLE IF NOT EXISTS face_frames
 CREATE TABLE IF NOT EXISTS user_presence
 (
     presence_id SERIAL PRIMARY KEY,
-    user_id     TEXT        NOT NULL,
+    user_id     TEXT      NOT NULL,
     entry_time  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     exit_time   TIMESTAMP,
-    is_active   BOOLEAN              DEFAULT TRUE
+    is_active   BOOLEAN            DEFAULT TRUE
 );
 
 -- Tạo các indexes cho tối ưu hiệu suất

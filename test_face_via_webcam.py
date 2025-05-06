@@ -2,6 +2,7 @@ import cv2
 import requests
 import numpy as np
 import time
+import uuid
 
 API_URL = "http://localhost:8000/face/recognize"
 TARGET_FPS = 20
@@ -14,6 +15,8 @@ frame_count = 0
 start_time = time.time()
 fps = 0
 last_frame_time = time.time()
+
+cam_id = str(uuid.uuid4())
 
 while True:
     now = time.time()
@@ -29,17 +32,18 @@ while True:
     frame_count += 1
     frame_idx += 1
 
-    # Gửi ảnh và frame_idx lên API
     _, jpg_img = cv2.imencode('.jpg', frame)
     files = {'file': ('frame.jpg', jpg_img.tobytes(), 'image/jpeg')}
-    data = {'frame_idx': frame_idx}
+    data = {
+        'frame_idx': frame_idx,
+        'cam_id': cam_id
+    }
 
     try:
         resp = requests.post(API_URL, files=files, data=data, timeout=5)
 
         if resp.status_code == 200:
             result = resp.json()
-
             if "result" in result:
                 result_data = result["result"]
                 if isinstance(result_data, list):
@@ -50,23 +54,19 @@ while True:
                             user_id = item.get("user_id")
 
                             if detail == "Không tìm thấy người phù hợp" or detail == "Đang xử lý...":
-                                # Nếu không nhận diện được người, màu đỏ và nhãn "Không xác định"
                                 label = "Không xác định"
-                                color = (0, 0, 255)  # Màu đỏ
+                                color = (0, 0, 255)
                             else:
-                                # Nếu nhận diện được người, hiển thị user_id và màu xanh
                                 label = str(user_id) if user_id is not None else "Không xác định"
-                                color = (0, 255, 0)  # Màu xanh
+                                color = (0, 255, 0)
 
-                            # Chuyển đổi bbox từ tỉ lệ 0-1 về tọa độ pixel
                             height, width, _ = frame.shape
                             x1, y1, x2, y2 = bbox
-                            x1 = int(x1 * width)  # Chuyển đổi từ tỉ lệ sang pixel
+                            x1 = int(x1 * width)
                             y1 = int(y1 * height)
                             x2 = int(x2 * width)
                             y2 = int(y2 * height)
 
-                            # Vẽ bounding box
                             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                             cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
@@ -78,7 +78,6 @@ while True:
         print(f"Exception: {e}")
         cv2.putText(frame, f"API Error: {str(e)}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
 
-    # Tính toán FPS thực tế (cập nhật mỗi giây)
     current_time = time.time()
     time_elapsed = current_time - start_time
     if time_elapsed >= 1.0:
@@ -90,7 +89,7 @@ while True:
     cv2.putText(frame, fps_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
     cv2.imshow("Face Recognition (ESC de thoat)", frame)
-    if cv2.waitKey(1) & 0xFF == 27:  # ESC để thoát
+    if cv2.waitKey(1) & 0xFF == 27:
         break
 
 cap.release()
