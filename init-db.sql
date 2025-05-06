@@ -2,9 +2,9 @@
 CREATE TABLE IF NOT EXISTS recognize_results
 (
     result_id      SERIAL PRIMARY KEY,
-    user_id        TEXT        NOT NULL,
-    bbox           JSONB       NOT NULL,
-    detection_time TIMESTAMPTZ NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+    user_id        TEXT      NOT NULL,
+    bbox           JSONB     NOT NULL,
+    detection_time TIMESTAMP NOT NULL,
     confidence     FLOAT,
     object_name    TEXT
 );
@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS user_presence
 (
     presence_id SERIAL PRIMARY KEY,
     user_id     TEXT        NOT NULL,
-    entry_time  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    exit_time   TIMESTAMPTZ,
+    entry_time  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    exit_time   TIMESTAMP,
     is_active   BOOLEAN              DEFAULT TRUE
 );
 

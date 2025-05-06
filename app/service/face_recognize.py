@@ -1,6 +1,8 @@
 import cv2
+import pytz
 import asyncio
 import numpy as np
+from datetime import datetime
 from app.service.upload_r2 import *
 from qdrant_client import QdrantClient
 from app.service.save_to_postgres import *
@@ -8,6 +10,10 @@ from app.config.settings import QDRANT_HOST
 from app.service.extract_vector import extract_vector
 from app.utils.preprocess import crop_face, normalize_bbox
 from app.config.settings import COLLECTION_NAME, threshold
+
+utc_time = datetime.utcnow()
+vn_timezone = pytz.timezone("Asia/Ho_Chi_Minh")
+vn_time = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
 
 
 async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=threshold):
@@ -42,7 +48,7 @@ async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=thresh
             results.append({"user_id": user_id, "bbox": normalized_bbox})
 
             object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-            await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, object_name)
+            await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, vn_time, object_name)
             continue
 
         if face.get("reported", False) and face.get("frame_count", 0) >= 8:
@@ -79,7 +85,7 @@ async def face_recognize(app, img_np, frame_idx, top_k=1, score_threshold=thresh
                 results.append({"user_id": user_id, "bbox": normalized_bbox})
 
                 object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-                await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, object_name)
+                await save_to_postgres(app, user_id, normalized_bbox, confidence, frame_idx, vn_time, object_name)
             else:
                 results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
 
