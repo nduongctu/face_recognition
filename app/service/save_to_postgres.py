@@ -5,9 +5,11 @@ from app.utils.postgres import *
 
 async def save_to_postgres(app, user_id, bbox, confidence, cam_id, frame_idx, detection_time, object_name=None):
     try:
-        frame_id = uuid1(node=int(UUID(cam_id)))
+        cam_id_obj = UUID(cam_id)
+        cam_id_node = cam_id_obj.int & (2 ** 8 - 1)  # Lấy 8 bit cuối
+        frame_id = uuid1(node=cam_id_node)
 
-        async with app.db.acquire() as conn:
+        async with get_db_pool().acquire() as conn:
             async with conn.transaction():
                 bbox_json = json.dumps(bbox)
 
