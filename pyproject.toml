@@ -1,0 +1,24 @@
+[project]
+name = "uv-fastapi-face_recognition"
+version = "0.1.0"
+description = "FastAPI Face Recognize project"
+readme = "README.md"
+requires-python = ">=3.8.10"
+dependencies = [
+    "fastapi[standard]",
+    "qdrant-client==1.12.1",
+    "python-multipart==0.0.20",
+    "insightface==0.7.3",
+    "opencv-python==4.11.0.86",
+    "numpy>=1.24.4",
+    "onnxruntime-gpu==1.16.3",
+    "asyncpg==0.30.0",
+    "databases==0.9.0",
+    "boto3==1.37.38",
+    "python-dotenv==1.0.1",
+    "pytz==2025.2"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
