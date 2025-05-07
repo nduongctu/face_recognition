@@ -3,100 +3,138 @@ import pytz
 import asyncio
 import numpy as np
 from datetime import datetime
-from app.service.upload_r2 import *
+from functools import lru_cache
 from qdrant_client import QdrantClient
-from app.service.save_to_postgres import *
-from app.config.settings import QDRANT_HOST
+from typing import Dict, List, Any, Optional, Union
 from app.service.extract_vector import extract_vector
+from app.service.upload_r2 import upload_face_crop_to_r2
+from app.service.save_to_postgres import save_to_postgres
 from app.utils.preprocess import crop_face, normalize_bbox
-from app.config.settings import COLLECTION_NAME, threshold
-
-utc_time = datetime.utcnow()
-vn_timezone = pytz.timezone("Asia/Ho_Chi_Minh")
-vn_time = datetime.now(pytz.timezone("Asia/Ho_Chi_Minh")).replace(tzinfo=None)
+from app.config.settings import QDRANT_HOST, COLLECTION_NAME, threshold
 
 
-async def face_recognize(app, cam_id, img_np, frame_idx, top_k=1, score_threshold=threshold):
-    """ Nhận diện nhiều khuôn mặt: trả về danh sách user_id hoặc thông báo cho mỗi khuôn mặt trong ảnh (kèm bbox).
-    Chỉ lưu vào PostgreSQL và R2 nếu nhận dạng được người dùng. """
+# Lưu cache múi giờ để tránh khởi tạo lặp lại
+@lru_cache(maxsize=1)
+def get_vn_timezone():
+    return pytz.timezone("Asia/Ho_Chi_Minh")
+
+
+# Khởi tạo Qdrant client một lần duy nhất như biến toàn cục
+client = QdrantClient(QDRANT_HOST)
+
+
+async def process_single_face(
+        app,
+        cam_id: str,
+        img_np: np.ndarray,
+        face: Dict[str, Any],
+        frame_idx: int,
+        height: int,
+        width: int,
+        score_threshold: float
+) -> Optional[Dict[str, Any]]:
+    """Xử lý một khuôn mặt riêng lẻ để phát hiện và nhận dạng"""
+
+    bbox = face.get("bbox")
+    user_id = face.get("user_id")
+    confidence = face.get("confidence", 0.0)
+
+    if not bbox:
+        return None
+
+    face_crop = await crop_face(img_np, bbox)
+    if face_crop is None:
+        return None
+
+    normalized_bbox = normalize_bbox(bbox, width, height)
+
+    # Nếu user_id đã được xác định, lưu trực tiếp
+    if user_id:
+        object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
+        vn_time = datetime.now(get_vn_timezone()).replace(tzinfo=None)
+        asyncio.create_task(
+            save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+        )
+        return {"user_id": user_id, "bbox": normalized_bbox}
+
+    # Bỏ qua tìm kiếm nếu khuôn mặt đã được báo cáo không có kết quả khớp sau ngưỡng
+    if face.get("reported", False) and face.get("frame_count", 0) >= 8:
+        return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
+
+    # Kiểm tra xem có vector nhúng để tìm kiếm không
+    embedding = face.get("embedding")
+    if embedding is None:
+        return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
+
+    # Tìm kiếm khuôn mặt khớp trong cơ sở dữ liệu
+    try:
+        search_result = client.search_groups(
+            collection_name=COLLECTION_NAME,
+            query_vector=embedding,
+            limit=1,
+            group_by="user_id",
+            group_size=1,
+            with_payload=True,
+            score_threshold=score_threshold,
+        )
+
+        # Không tìm thấy kết quả khớp
+        if not search_result.groups or not search_result.groups[0].hits:
+            return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
+
+        # Tìm thấy kết quả khớp
+        hit = search_result.groups[0].hits[0]
+        user_id = hit.payload.get('user_id') if hit.payload else None
+        confidence = hit.score
+
+        if user_id:
+            face["user_id"] = user_id
+            face["is_identified"] = True
+
+            object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
+            vn_time = datetime.now(get_vn_timezone()).replace(tzinfo=None)
+            asyncio.create_task(
+                save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+            )
+            return {"user_id": user_id, "bbox": normalized_bbox}
+        else:
+            return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
+
+    except Exception as e:
+        return {"bbox": normalized_bbox, "detail": f"Lỗi kết nối với Qdrant: {str(e)}"}
+
+
+async def face_recognize(
+        app,
+        cam_id: str,
+        img_np: np.ndarray,
+        frame_idx: int,
+        score_threshold: float = threshold
+) -> Union[Dict[str, str], Dict[str, List[Dict[str, Any]]]]:
+    """
+    Nhận diện nhiều khuôn mặt trong một hình ảnh, trả về danh sách user_id hoặc thông báo cho mỗi khuôn mặt.
+    Chỉ lưu vào PostgreSQL và R2 nếu nhận dạng được người dùng.
+    """
+    # Trích xuất vector khuôn mặt
     face_list = extract_vector(img_np)
+
+    # Xử lý các trường hợp lỗi
     if isinstance(face_list, str):
         return {"detail": face_list}
     if not face_list:
         return {"detail": "Không tìm thấy khuôn mặt"}
 
-    client = QdrantClient(QDRANT_HOST)
-    results = []
+    # Lấy kích thước ảnh một lần
     height, width, _ = img_np.shape
 
-    for face in face_list:
-        bbox = face.get("bbox")
-        user_id = face.get("user_id")
-        confidence = face.get("confidence", 0.0)
+    # Xử lý tất cả khuôn mặt song song
+    tasks = [
+        process_single_face(app, cam_id, img_np, face, frame_idx, height, width, score_threshold)
+        for face in face_list
+    ]
+    face_results = await asyncio.gather(*tasks)
 
-        if bbox:
-            face_crop = await crop_face(img_np, bbox)
-            if face_crop is None:
-                continue
-
-            normalized_bbox = normalize_bbox(bbox, width, height)
-
-        else:
-            continue
-
-        if user_id:
-            results.append({"user_id": user_id, "bbox": normalized_bbox})
-
-            object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-            asyncio.create_task(
-                save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
-            )
-            continue
-
-        if face.get("reported", False) and face.get("frame_count", 0) >= 8:
-            results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
-            continue
-
-        embedding = face.get("embedding")
-        if embedding is None:
-            results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
-            continue
-
-        try:
-            search_result = client.search_groups(
-                collection_name=COLLECTION_NAME,
-                query_vector=embedding,
-                limit=top_k,
-                group_by="user_id",
-                group_size=1,
-                with_payload=True,
-                score_threshold=score_threshold,
-            )
-
-            if not search_result.groups or not search_result.groups[0].hits:
-                results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
-                continue
-
-            hit = search_result.groups[0].hits[0]
-            user_id = hit.payload.get('user_id') if hit.payload else None
-            confidence = hit.score
-
-            if user_id:
-                face["user_id"] = user_id
-                face["is_identified"] = True
-                results.append({"user_id": user_id, "bbox": normalized_bbox})
-
-                object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-                asyncio.create_task(
-                    save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
-                )
-            else:
-                results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
-
-        except Exception as e:
-            results.append({
-                "bbox": normalized_bbox,
-                "detail": f"Lỗi kết nối với Qdrant: {str(e)}"
-            })
+    # Lọc bỏ các kết quả None (khuôn mặt không thể xử lý)
+    results = [result for result in face_results if result is not None]
 
     return results
