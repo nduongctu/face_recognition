@@ -3,7 +3,6 @@ import numpy as np
 import insightface
 from insightface.app.common import Face
 from app.utils.align_face import align_face
-from app.service.fas_model import is_real_face
 from app.utils.model import det_model, rec_model
 from concurrent.futures import ThreadPoolExecutor
 from app.utils.preprocess import resize_with_padding, expand_bbox_px
