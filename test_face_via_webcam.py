@@ -3,10 +3,46 @@ import requests
 import numpy as np
 import time
 import uuid
+import threading
+import queue
 
 API_URL = "http://localhost:8000/face/recognize"
 TARGET_FPS = 20
 FRAME_INTERVAL = 1.0 / TARGET_FPS
+
+SEND_EVERY_N_FRAMES = 1
+MAX_DELAY = 3
+NUM_WORKERS = 3
+
+cam_id = str(uuid.uuid4())
+
+frame_queue = queue.Queue(maxsize=5)
+results = {}
+results_lock = threading.Lock()
+
+
+def api_worker():
+    while True:
+        try:
+            idx, frame = frame_queue.get()
+            _, jpg_img = cv2.imencode('.jpg', frame)
+            files = {'file': ('frame.jpg', jpg_img.tobytes(), 'image/jpeg')}
+            data = {
+                'frame_idx': idx,
+                'cam_id': cam_id
+            }
+            resp = requests.post(API_URL, files=files, data=data, timeout=5)
+            if resp.status_code == 200:
+                result = resp.json()
+                if "result" in result:
+                    with results_lock:
+                        results[idx] = result["result"]
+        except Exception as e:
+            print(f"API worker exception: {e}")
+
+
+for _ in range(NUM_WORKERS):
+    threading.Thread(target=api_worker, daemon=True).start()
 
 cap = cv2.VideoCapture(0)
 
@@ -16,7 +52,8 @@ start_time = time.time()
 fps = 0
 last_frame_time = time.time()
 
-cam_id = str(uuid.uuid4())
+last_result = None
+last_result_frame_idx = -1
 
 while True:
     now = time.time()
@@ -29,66 +66,60 @@ while True:
     if not ret:
         break
 
-    frame_count += 1
     frame_idx += 1
+    frame_count += 1
+    display_frame = frame.copy()
 
-    _, jpg_img = cv2.imencode('.jpg', frame)
-    files = {'file': ('frame.jpg', jpg_img.tobytes(), 'image/jpeg')}
-    data = {
-        'frame_idx': frame_idx,
-        'cam_id': cam_id
-    }
+    if frame_idx % SEND_EVERY_N_FRAMES == 0 and not frame_queue.full():
+        frame_queue.put((frame_idx, frame.copy()))
 
-    try:
-        resp = requests.post(API_URL, files=files, data=data, timeout=5)
+    matched_result = None
+    with results_lock:
+        for idx in sorted(results.keys(), reverse=True):
+            if idx <= frame_idx and frame_idx - idx <= MAX_DELAY:
+                matched_result = results.pop(idx)
+                last_result = matched_result
+                last_result_frame_idx = idx
+                break
 
-        if resp.status_code == 200:
-            result = resp.json()
-            if "result" in result:
-                result_data = result["result"]
-                if isinstance(result_data, list):
-                    for item in result_data:
-                        bbox = item.get("bbox")
-                        if bbox:
-                            detail = item.get("detail", "")
-                            user_id = item.get("user_id")
+    # Nếu không có kết quả mới, dùng lại kết quả cũ
+    if matched_result is None and last_result and frame_idx - last_result_frame_idx <= MAX_DELAY:
+        matched_result = last_result
 
-                            if detail == "Không tìm thấy người phù hợp" or detail == "Đang xử lý...":
-                                label = "Không xác định"
-                                color = (0, 0, 255)
-                            else:
-                                label = str(user_id) if user_id is not None else "Không xác định"
-                                color = (0, 255, 0)
+    if matched_result:
+        height, width, _ = frame.shape
+        for item in matched_result:
+            bbox = item.get("bbox")
+            if bbox:
+                detail = item.get("detail", "")
+                user_id = item.get("user_id")
 
-                            height, width, _ = frame.shape
-                            x1, y1, x2, y2 = bbox
-                            x1 = int(x1 * width)
-                            y1 = int(y1 * height)
-                            x2 = int(x2 * width)
-                            y2 = int(y2 * height)
+                if detail == "Không tìm thấy người phù hợp" or detail == "Đang xử lý...":
+                    label = "Không xác định"
+                    color = (0, 0, 255)
+                else:
+                    label = str(user_id) if user_id is not None else "Không xác định"
+                    color = (0, 255, 0)
 
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                x1, y1, x2, y2 = bbox
+                x1 = int(x1 * width)
+                y1 = int(y1 * height)
+                x2 = int(x2 * width)
+                y2 = int(y2 * height)
 
-        else:
-            print(f"Error: Received status code {resp.status_code}")
-            cv2.putText(frame, f"API Error: {resp.status_code}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255),
-                        2)
-    except Exception as e:
-        print(f"Exception: {e}")
-        cv2.putText(frame, f"API Error: {str(e)}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
     current_time = time.time()
-    time_elapsed = current_time - start_time
-    if time_elapsed >= 1.0:
-        fps = frame_count / time_elapsed
+    if current_time - start_time >= 1.0:
+        fps = frame_count / (current_time - start_time)
         frame_count = 0
         start_time = current_time
 
     fps_text = f"FPS: {fps:.2f}"
-    cv2.putText(frame, fps_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+    cv2.putText(display_frame, fps_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
-    cv2.imshow("Face Recognition (ESC de thoat)", frame)
+    cv2.imshow("Face Recognition (ESC de thoat)", display_frame)
     if cv2.waitKey(1) & 0xFF == 27:
         break
 
