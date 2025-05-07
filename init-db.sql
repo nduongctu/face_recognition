@@ -17,19 +17,9 @@ CREATE TABLE IF NOT EXISTS face_frames
     idx_frame INTEGER NOT NULL
 );
 
--- Tạo bảng theo dõi hiện diện của người dùng
-CREATE TABLE IF NOT EXISTS user_presence
-(
-    presence_id SERIAL PRIMARY KEY,
-    user_id     TEXT      NOT NULL,
-    entry_time  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    exit_time   TIMESTAMP,
-    is_active   BOOLEAN            DEFAULT TRUE
-);
 
 -- Tạo các indexes cho tối ưu hiệu suất
 CREATE INDEX IF NOT EXISTS idx_recognize_user_time ON recognize_results (user_id, detection_time);
-CREATE INDEX IF NOT EXISTS idx_user_presence_active ON user_presence (user_id, is_active);
 
 -- -- Tạo function để lọc trùng lặp
 -- CREATE OR REPLACE FUNCTION filter_duplicate_detections()

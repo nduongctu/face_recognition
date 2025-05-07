@@ -48,7 +48,9 @@ async def face_recognize(app, cam_id, img_np, frame_idx, top_k=1, score_threshol
             results.append({"user_id": user_id, "bbox": normalized_bbox})
 
             object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-            await save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+            asyncio.create_task(
+                save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+            )
             continue
 
         if face.get("reported", False) and face.get("frame_count", 0) >= 8:
@@ -85,8 +87,9 @@ async def face_recognize(app, cam_id, img_np, frame_idx, top_k=1, score_threshol
                 results.append({"user_id": user_id, "bbox": normalized_bbox})
 
                 object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
-                await save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time,
-                                       object_name)
+                asyncio.create_task(
+                    save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+                )
             else:
                 results.append({"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"})
 

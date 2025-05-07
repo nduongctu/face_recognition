@@ -4,7 +4,7 @@ import asyncpg
 
 from app.utils.postgres import get_db_pool
 
-router = APIRouter(prefix="/report", tags=["Report"])
+router = APIRouter()
 
 
 @router.get("/total_recognitions", summary="Thống kê tổng số nhận diện trong khoảng thời gian")

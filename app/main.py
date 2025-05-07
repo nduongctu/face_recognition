@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from app.utils.postgres import *
 from app.router import face_recognition, report
 from fastapi.middleware.cors import CORSMiddleware
+from app.utils.warmup_model import warmup_models
 
 app = FastAPI()
 
@@ -19,6 +20,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def on_startup():
     await init_db_pool()
+    await warmup_models()
 
 
 @app.on_event("shutdown")

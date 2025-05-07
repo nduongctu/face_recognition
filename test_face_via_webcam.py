@@ -20,8 +20,11 @@ frame_queue = queue.Queue(maxsize=5)
 results = {}
 results_lock = threading.Lock()
 
+ready_flags = [threading.Event() for _ in range(NUM_WORKERS)]
 
-def api_worker():
+
+def api_worker(worker_idx):
+    ready_flags[worker_idx].set()
     while True:
         try:
             idx, frame = frame_queue.get()
@@ -41,8 +44,12 @@ def api_worker():
             print(f"API worker exception: {e}")
 
 
-for _ in range(NUM_WORKERS):
-    threading.Thread(target=api_worker, daemon=True).start()
+for i in range(NUM_WORKERS):
+    threading.Thread(target=api_worker, args=(i,), daemon=True).start()
+
+# Đợi toàn bộ worker đã sẵn sàng
+for flag in ready_flags:
+    flag.wait()
 
 cap = cv2.VideoCapture(0)
 
@@ -82,33 +89,34 @@ while True:
                 last_result_frame_idx = idx
                 break
 
-    # Nếu không có kết quả mới, dùng lại kết quả cũ
     if matched_result is None and last_result and frame_idx - last_result_frame_idx <= MAX_DELAY:
         matched_result = last_result
 
     if matched_result:
         height, width, _ = frame.shape
         for item in matched_result:
-            bbox = item.get("bbox")
-            if bbox:
-                detail = item.get("detail", "")
-                user_id = item.get("user_id")
+            # Kiểm tra nếu item là dictionary và có "bbox"
+            if isinstance(item, dict) and "bbox" in item:
+                bbox = item["bbox"]
+                if bbox:
+                    detail = item.get("detail", "")
+                    user_id = item.get("user_id")
 
-                if detail == "Không tìm thấy người phù hợp" or detail == "Đang xử lý...":
-                    label = "Không xác định"
-                    color = (0, 0, 255)
-                else:
-                    label = str(user_id) if user_id is not None else "Không xác định"
-                    color = (0, 255, 0)
+                    if detail == "Không tìm thấy người phù hợp" or detail == "Đang xử lý...":
+                        label = "Khong xac dinh"
+                        color = (0, 0, 255)
+                    else:
+                        label = str(user_id) if user_id is not None else "Khong xac dinh"
+                        color = (0, 255, 0)
 
-                x1, y1, x2, y2 = bbox
-                x1 = int(x1 * width)
-                y1 = int(y1 * height)
-                x2 = int(x2 * width)
-                y2 = int(y2 * height)
+                    x1, y1, x2, y2 = bbox
+                    x1 = int(x1 * width)
+                    y1 = int(y1 * height)
+                    x2 = int(x2 * width)
+                    y2 = int(y2 * height)
 
-                cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 2)
-                cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                    cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
     current_time = time.time()
     if current_time - start_time >= 1.0:
