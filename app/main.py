@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from app.utils.postgres import *
-from app.router import face_recognition, report
+from app.router import face_recognition, report, streaming
 from fastapi.middleware.cors import CORSMiddleware
 from app.utils.warmup_model import warmup_models
 
@@ -30,6 +30,7 @@ async def on_shutdown():
 
 app.include_router(face_recognition.router, prefix="/face", tags=["Face Recognition"])
 app.include_router(report.router, prefix="/report", tags=["Report"])
+app.include_router(streaming.router, prefix="/video", tags=["Video Streaming"])
 
 if __name__ == "__main__":
     import uvicorn

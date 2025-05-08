@@ -1,57 +1,66 @@
 import cv2
 import requests
-import numpy as np
-import time
 import uuid
 import threading
 import queue
+import time
 
 API_URL = "http://localhost:8000/face/recognize"
-TARGET_FPS = 20
+TARGET_FPS = 35
 FRAME_INTERVAL = 1.0 / TARGET_FPS
 
-SEND_EVERY_N_FRAMES = 1
-MAX_DELAY = 3
-NUM_WORKERS = 3
+VIDEO_SOURCE = "http://10.1.2.165:4747/video"
 
+SEND_EVERY_N_FRAMES = 1
+MAX_DELAY = 8
+NUM_WORKERS = 20
+frame_queue = queue.Queue(maxsize=MAX_DELAY + NUM_WORKERS + 5)
+
+USE_STREAM = False
 cam_id = str(uuid.uuid4())
 
-frame_queue = queue.Queue(maxsize=5)
 results = {}
 results_lock = threading.Lock()
 
 ready_flags = [threading.Event() for _ in range(NUM_WORKERS)]
 
 
+# Worker function để xử lý nhận diện khuôn mặt
 def api_worker(worker_idx):
     ready_flags[worker_idx].set()
+    session = requests.Session()
     while True:
         try:
-            idx, frame = frame_queue.get()
-            _, jpg_img = cv2.imencode('.jpg', frame)
-            files = {'file': ('frame.jpg', jpg_img.tobytes(), 'image/jpeg')}
-            data = {
-                'frame_idx': idx,
-                'cam_id': cam_id
-            }
-            resp = requests.post(API_URL, files=files, data=data, timeout=5)
+            idx, frame = frame_queue.get(timeout=1)
+            jpg_bytes = cv2.imencode('.jpg', frame)[1].tobytes()
+            files = {'file': ('frame.jpg', jpg_bytes, 'image/jpeg')}
+            data = {'frame_idx': idx, 'cam_id': cam_id}
+
+            resp = session.post(API_URL, files=files, data=data, timeout=5)
             if resp.status_code == 200:
                 result = resp.json()
                 if "result" in result:
                     with results_lock:
                         results[idx] = result["result"]
+            frame_queue.task_done()
+        except queue.Empty:
+            continue
         except Exception as e:
-            print(f"API worker exception: {e}")
+            print(f"[Worker {worker_idx}] API error: {e}")
+            time.sleep(0.1)
 
 
 for i in range(NUM_WORKERS):
     threading.Thread(target=api_worker, args=(i,), daemon=True).start()
 
-# Đợi toàn bộ worker đã sẵn sàng
+# Đợi tất cả các worker threads sẵn sàng
 for flag in ready_flags:
     flag.wait()
 
-cap = cv2.VideoCapture(0)
+if USE_STREAM:
+    cap = cv2.VideoCapture(VIDEO_SOURCE, cv2.CAP_FFMPEG)
+else:
+    cap = cv2.VideoCapture(0)
 
 frame_idx = 0
 frame_count = 0
@@ -62,23 +71,25 @@ last_frame_time = time.time()
 last_result = None
 last_result_frame_idx = -1
 
+# Luồng chính sẽ đọc frame từ video và đưa vào queue
 while True:
     now = time.time()
     elapsed = now - last_frame_time
     if elapsed < FRAME_INTERVAL:
-        time.sleep(FRAME_INTERVAL - elapsed)
+        time.sleep(FRAME_INTERVAL - elapsed)  # Điều chỉnh tốc độ FPS
     last_frame_time = time.time()
 
-    ret, frame = cap.read()
+    ret, frame = cap.read()  # Đọc một frame từ video stream
     if not ret:
         break
 
     frame_idx += 1
     frame_count += 1
-    display_frame = frame.copy()
+    display_frame = frame.copy()  # Copy frame để vẽ kết quả
 
+    # Mỗi SEND_EVERY_N_FRAMES frame sẽ đưa vào queue
     if frame_idx % SEND_EVERY_N_FRAMES == 0 and not frame_queue.full():
-        frame_queue.put((frame_idx, frame.copy()))
+        frame_queue.put((frame_idx, frame.copy()))  # Đưa frame vào queue
 
     matched_result = None
     with results_lock:
@@ -89,13 +100,13 @@ while True:
                 last_result_frame_idx = idx
                 break
 
+    # Nếu không có kết quả mới, dùng kết quả trước đó
     if matched_result is None and last_result and frame_idx - last_result_frame_idx <= MAX_DELAY:
         matched_result = last_result
 
     if matched_result:
         height, width, _ = frame.shape
         for item in matched_result:
-            # Kiểm tra nếu item là dictionary và có "bbox"
             if isinstance(item, dict) and "bbox" in item:
                 bbox = item["bbox"]
                 if bbox:
@@ -118,6 +129,7 @@ while True:
                     cv2.rectangle(display_frame, (x1, y1), (x2, y2), color, 2)
                     cv2.putText(display_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
+    # Tính FPS
     current_time = time.time()
     if current_time - start_time >= 1.0:
         fps = frame_count / (current_time - start_time)
@@ -127,6 +139,7 @@ while True:
     fps_text = f"FPS: {fps:.2f}"
     cv2.putText(display_frame, fps_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
+    # Hiển thị frame cùng với kết quả
     cv2.imshow("Face Recognition (ESC de thoat)", display_frame)
     if cv2.waitKey(1) & 0xFF == 27:
         break
