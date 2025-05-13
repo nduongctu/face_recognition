@@ -4,3 +4,4 @@ redis
 uuid
 redis
 Pillow
+python-dotenv

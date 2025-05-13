@@ -20,7 +20,6 @@ def get_vn_timezone():
     return pytz.timezone("Asia/Ho_Chi_Minh")
 
 
-# Khởi tạo Qdrant client một lần duy nhất như biến toàn cục
 client = QdrantClient(QDRANT_HOST)
 
 
@@ -51,9 +50,7 @@ async def process_single_face(
     if user_id:
         object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
         vn_time = datetime.now(get_vn_timezone()).replace(tzinfo=None)
-        asyncio.create_task(
-            save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
-        )
+        await save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
         return {"user_id": user_id, "bbox": normalized_bbox}
 
     # Bỏ qua tìm kiếm nếu khuôn mặt đã được báo cáo không có kết quả khớp sau ngưỡng
@@ -92,9 +89,7 @@ async def process_single_face(
 
             object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
             vn_time = datetime.now(get_vn_timezone()).replace(tzinfo=None)
-            asyncio.create_task(
-                save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
-            )
+            await save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
             return {"user_id": user_id, "bbox": normalized_bbox}
         else:
             return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
