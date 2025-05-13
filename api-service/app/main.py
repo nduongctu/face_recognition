@@ -1,9 +1,8 @@
-import os
 from fastapi import FastAPI
-from app.utils.postgres import *
-from app.router import face_recognition, report, streaming
+from face_recognize.postgres import *
+from router import face_recognition, report, streaming
 from fastapi.middleware.cors import CORSMiddleware
-from app.utils.warmup_model import warmup_models
+from utils.warmup_model import warmup_models
 
 app = FastAPI()
 

@@ -1,8 +1,8 @@
 import uuid
 import numpy as np
-from app.utils.qdrant import client
-from app.config.settings import COLLECTION_NAME
-from app.service.extract_vector_save_qdrant import extract_vector, extract_vector_align
+from utils.qdrant import client
+from face_recognize.config import COLLECTION_NAME
+from service.extract_vector_save_qdrant import extract_vector, extract_vector_align
 
 
 async def save_face_to_qdrant(img_np, user_id, pose):

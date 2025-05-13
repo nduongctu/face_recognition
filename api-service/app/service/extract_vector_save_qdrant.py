@@ -2,9 +2,9 @@ import cv2
 import numpy as np
 import insightface
 from insightface.app.common import Face
-from app.utils.align_face import align_face
-from app.utils.model import det_model, rec_model
-from app.utils.preprocess import resize_with_padding, expand_bbox_px
+from face_recognize.align_face import align_face
+from face_recognize.model import det_model, rec_model
+from face_recognize.preprocess import resize_with_padding, expand_bbox_px
 
 
 def extract_vector(img_np, det_thresh=0.6):

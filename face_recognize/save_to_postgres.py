@@ -1,9 +1,9 @@
 import json
 from uuid import uuid1, UUID
-from app.utils.postgres import *
+from face_recognize.postgres import *
 
 
-async def save_to_postgres(app, user_id, bbox, confidence, cam_id, frame_idx, detection_time, object_name=None):
+async def save_to_postgres(user_id, bbox, confidence, cam_id, frame_idx, detection_time, object_name=None):
     try:
         cam_id_obj = UUID(cam_id)
         cam_id_node = cam_id_obj.int & (2 ** 8 - 1)  # Lấy 8 bit cuối

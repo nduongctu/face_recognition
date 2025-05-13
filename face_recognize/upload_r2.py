@@ -32,10 +32,8 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 def upload_face_crop_to_r2(face_crop: np.ndarray, user_id: str, frame_idx: int) -> str:
     try:
-        # Chuyển numpy array thành PIL Image
         pil_img = Image.fromarray(face_crop)
 
-        # Chuẩn bị byte stream
         buffer = BytesIO()
         pil_img.save(buffer, format='JPEG')
         buffer.seek(0)
@@ -49,7 +47,6 @@ def upload_face_crop_to_r2(face_crop: np.ndarray, user_id: str, frame_idx: int) 
             except Exception as e:
                 print(f"Lỗi khi upload ảnh lên R2: {e}")
 
-        # Gọi hàm upload trong thread riêng biệt
         executor.submit(upload_to_r2)
 
         # Trả về object_name ngay lập tức

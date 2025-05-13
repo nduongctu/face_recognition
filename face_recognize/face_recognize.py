@@ -1,16 +1,17 @@
-import cv2
 import pytz
 import asyncio
 import numpy as np
+from PIL import Image
+from io import BytesIO
 from datetime import datetime
 from functools import lru_cache
 from qdrant_client import QdrantClient
 from typing import Dict, List, Any, Optional, Union
-from app.service.extract_vector import extract_vector
-from app.service.upload_r2 import upload_face_crop_to_r2
-from app.service.save_to_postgres import save_to_postgres
-from app.utils.preprocess import crop_face, normalize_bbox
-from app.config.settings import QDRANT_HOST, COLLECTION_NAME, threshold
+from face_recognize.extract_vector import extract_vector
+from face_recognize.upload_r2 import upload_face_crop_to_r2
+from face_recognize.save_to_postgres import save_to_postgres
+from face_recognize.preprocess import crop_face, normalize_bbox
+from face_recognize.config import QDRANT_HOST, COLLECTION_NAME, threshold
 
 
 # Lưu cache múi giờ để tránh khởi tạo lặp lại
@@ -24,7 +25,6 @@ client = QdrantClient(QDRANT_HOST)
 
 
 async def process_single_face(
-        app,
         cam_id: str,
         img_np: np.ndarray,
         face: Dict[str, Any],
@@ -48,12 +48,11 @@ async def process_single_face(
 
     normalized_bbox = normalize_bbox(bbox, width, height)
 
-    # Nếu user_id đã được xác định, lưu trực tiếp
     if user_id:
         object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
         vn_time = datetime.now(get_vn_timezone()).replace(tzinfo=None)
         asyncio.create_task(
-            save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+            save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
         )
         return {"user_id": user_id, "bbox": normalized_bbox}
 
@@ -94,7 +93,7 @@ async def process_single_face(
             object_name = upload_face_crop_to_r2(face_crop, user_id, frame_idx)
             vn_time = datetime.now(get_vn_timezone()).replace(tzinfo=None)
             asyncio.create_task(
-                save_to_postgres(app, user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
+                save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
             )
             return {"user_id": user_id, "bbox": normalized_bbox}
         else:
@@ -105,7 +104,6 @@ async def process_single_face(
 
 
 async def face_recognize(
-        app,
         cam_id: str,
         img_np: np.ndarray,
         frame_idx: int,
@@ -129,7 +127,7 @@ async def face_recognize(
 
     # Xử lý tất cả khuôn mặt song song
     tasks = [
-        process_single_face(app, cam_id, img_np, face, frame_idx, height, width, score_threshold)
+        process_single_face(cam_id, img_np, face, frame_idx, height, width, score_threshold)
         for face in face_list
     ]
     face_results = await asyncio.gather(*tasks)

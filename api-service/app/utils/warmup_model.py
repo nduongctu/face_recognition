@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from insightface.app.common import Face
-from app.utils.model import det_model, rec_model
+from face_recognize.model import det_model, rec_model
 
 
 async def warmup_models():

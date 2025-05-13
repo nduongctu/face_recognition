@@ -1,11 +1,12 @@
+import uuid
+import json
+import redis
 import numpy as np
 from PIL import Image
 from io import BytesIO
-from app.utils.postgres import *
-from datetime import datetime, timedelta
 from fastapi.responses import JSONResponse
-from app.service.face_recognize import face_recognize
-from app.service.save_face_to_qdrant import save_face_to_qdrant
+from face_recognize.face_recognize import face_recognize
+from service.save_face_to_qdrant import save_face_to_qdrant
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Request
 
 router = APIRouter()
@@ -81,3 +82,46 @@ async def recognize_face(
         return JSONResponse({"success": True, "message": "Nhận diện thành công", "result": result})
     except Exception as e:
         return {"detail": f"Lỗi khi xử lý ảnh: {str(e)}"}
+
+
+@router.post("/process_video")
+async def process_video(url_stream: str):
+    cam_id = str(uuid.uuid4())
+    redis_host = "redis"
+
+    try:
+        redis_client = redis.Redis(host=redis_host, port=6379, db=0)
+        redis_client.ping()
+    except redis.exceptions.ConnectionError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to connect to Redis: {e}")
+
+    data = {
+        "stream_url": url_stream,
+        "cam_id": cam_id
+    }
+
+    try:
+        redis_client.set(f"video_stream:{cam_id}", json.dumps(data))
+        print(f"Stream URL {url_stream} pushed to Redis with cam_id {cam_id}.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to push stream info to Redis: {e}")
+
+    return {"message": "Video processing started successfully", "cam_id": cam_id}
+
+
+@router.post("/stop_video")
+async def stop_video():
+    redis_host = "redis"
+
+    try:
+        redis_client = redis.Redis(host=redis_host, port=6379, db=0)
+        redis_client.ping()
+    except redis.exceptions.ConnectionError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to connect to Redis: {e}")
+
+    keys = redis_client.keys('video_stream:*')
+    for key in keys:
+        redis_client.delete(key)
+        print(f"Deleted key {key.decode()}")
+
+    return {"message": "Video streams stopped successfully"}

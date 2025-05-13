@@ -1,10 +1,13 @@
+name: face_recognize-backend
 services:
-  fastapi_app:
-    build: .
-    container_name: face_recognition_app
+  fastapi_service:
+    build: ./api-service
+    container_name: fastapi_service
     ports:
       - "8000:8000"
     depends_on:
+      - video_service
+      - worker_service
       - qdrant
       - postgres
     environment:
@@ -14,8 +17,13 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - model_insightface:/root/.insightface/models
+      - ./face_recognize:/app/face_recognize
+    networks:
+      - app-network
     deploy:
       resources:
         reservations:
@@ -31,6 +39,8 @@ services:
       - "6333:6333"
     volumes:
       - face_data_qdrant:/qdrant/storage
+    networks:
+      - app-network
 
   postgres:
     image: postgres:14
@@ -64,6 +74,56 @@ services:
       - "checkpoint_timeout=15min"
       - "-c"
       - "random_page_cost=1.1"
+    networks:
+      - app-network
+
+  video_service:
+    build: ./video-service
+    container_name: video_service
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./face_recognize:/app/face_recognize
+    networks:
+      - app-network
+
+  worker_service:
+    build: ./worker-service
+    container_name: worker_service
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - model_insightface:/root/.insightface/models
+      - ./face_recognize:/app/face_recognize
+    networks:
+      - app-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
 
 volumes:
   face_data_qdrant:
@@ -72,3 +132,7 @@ volumes:
     external: true
   postgres_data:
     external: true
+
+networks:
+  app-network:
+    driver: bridge

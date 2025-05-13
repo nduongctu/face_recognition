@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from datetime import date
 import asyncpg
-
-from app.utils.postgres import get_db_pool
+from face_recognize.postgres import get_db_pool
 
 router = APIRouter()
 

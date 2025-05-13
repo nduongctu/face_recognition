@@ -6,7 +6,7 @@ import threading
 import numpy as np
 from typing import AsyncGenerator, Optional, Union
 import uuid
-from app.service.face_recognize import face_recognize
+from face_recognize.face_recognize import face_recognize
 import time
 
 router = APIRouter()
@@ -43,7 +43,7 @@ class Camera:
                 self.cap.release()
 
 
-async def gen_frames(camera: Camera, app, cam_id: str) -> AsyncGenerator[bytes, None]:
+async def gen_frames(camera: Camera, cam_id: str) -> AsyncGenerator[bytes, None]:
     frame_idx = 0
     frame_count = 0
     start_time = time.time()
@@ -55,7 +55,7 @@ async def gen_frames(camera: Camera, app, cam_id: str) -> AsyncGenerator[bytes, 
                 break
 
             # Gọi hàm nhận diện khuôn mặt
-            result = await face_recognize(app, cam_id, frame, frame_idx)
+            result = await face_recognize(cam_id, frame, frame_idx)
             frame_idx += 1
             frame_count += 1
 
@@ -118,12 +118,11 @@ async def gen_frames(camera: Camera, app, cam_id: str) -> AsyncGenerator[bytes, 
 
 @router.get("/")
 async def video_feed(
-        request: Request,
         camera_url: Optional[str] = None,
         cam_id: Optional[str] = Query(default_factory=lambda: str(uuid.uuid4()))
 ) -> StreamingResponse:
     camera = Camera(camera_url or 0)
     return StreamingResponse(
-        gen_frames(camera, request.app, cam_id),
+        gen_frames(camera, cam_id),
         media_type='multipart/x-mixed-replace; boundary=frame'
     )

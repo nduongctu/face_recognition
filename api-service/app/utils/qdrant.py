@@ -1,6 +1,6 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, HnswConfigDiff
-from app.config.settings import QDRANT_HOST, COLLECTION_NAME, VECTOR_SIZE
+from face_recognize.config import QDRANT_HOST, COLLECTION_NAME, VECTOR_SIZE
 
 distance_metric = Distance.COSINE
 
