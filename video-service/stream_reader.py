@@ -4,6 +4,8 @@ import cv2
 import json
 import os
 import uuid
+import requests
+from urllib.parse import quote
 from redis_queue import RedisQueue
 from PIL import Image
 from io import BytesIO
@@ -12,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 URL_STREAM = os.getenv("URL_STREAM")
+MODE = os.getenv("MODE")
 
 
 def connect_redis(redis_host='redis', redis_port=6379, retries=5, delay=3):
@@ -75,5 +78,15 @@ def process_video_stream(redis_host='redis', redis_port=6379, queue_name='video_
     cap.release()
 
 
+def generate_fastapi_stream_url(camera_url):
+    encoded_camera_url = quote(camera_url)
+    stream_url = f"http://localhost:8000/video/?camera_url={encoded_camera_url}"
+    print(f"URL truy cập từ trình duyệt: {stream_url}")
+    return stream_url
+
+
 if __name__ == "__main__":
-    process_video_stream()
+    if MODE == "non-stream":
+        process_video_stream()
+    else:
+        generate_fastapi_stream_url(URL_STREAM)

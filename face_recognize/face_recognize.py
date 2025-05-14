@@ -14,7 +14,6 @@ from face_recognize.preprocess import crop_face, normalize_bbox
 from face_recognize.config import QDRANT_HOST, COLLECTION_NAME, threshold
 
 
-# Lưu cache múi giờ để tránh khởi tạo lặp lại
 @lru_cache(maxsize=1)
 def get_vn_timezone():
     return pytz.timezone("Asia/Ho_Chi_Minh")
@@ -53,7 +52,6 @@ async def process_single_face(
         await save_to_postgres(user_id, normalized_bbox, confidence, cam_id, frame_idx, vn_time, object_name)
         return {"user_id": user_id, "bbox": normalized_bbox}
 
-    # Bỏ qua tìm kiếm nếu khuôn mặt đã được báo cáo không có kết quả khớp sau ngưỡng
     if face.get("reported", False) and face.get("frame_count", 0) >= 8:
         return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
 
@@ -62,7 +60,6 @@ async def process_single_face(
     if embedding is None:
         return {"bbox": normalized_bbox, "detail": "Không tìm thấy người phù hợp"}
 
-    # Tìm kiếm khuôn mặt khớp trong cơ sở dữ liệu
     try:
         search_result = client.search_groups(
             collection_name=COLLECTION_NAME,

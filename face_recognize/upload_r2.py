@@ -26,7 +26,6 @@ r2_client = boto3.client(
     region_name='auto'
 )
 
-# Tạo thread pool để xử lý bất đồng bộ
 executor = ThreadPoolExecutor(max_workers=4)
 
 
