@@ -22,4 +22,6 @@ RUN pip3 install --upgrade pip \
 
 COPY . /app
 
-CMD ["python3", "worker.py"]
+RUN chmod +x start.sh
+
+CMD ["./start.sh"]

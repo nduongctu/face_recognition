@@ -1,82 +1,77 @@
+import os
+import dramatiq
 import redis
 import time
+import pickle
 import numpy as np
 from PIL import Image
 from io import BytesIO
 from redis_queue import RedisQueue
 from face_recognize.face_recognize import face_recognize
-from face_recognize.postgres import init_db_pool, close_db_pool
-import asyncio
+from face_recognize.postgres import _pool, init_db_pool, get_db_pool
+from dramatiq.brokers.redis import RedisBroker
+from dramatiq.middleware import AsyncIO
+
+redis_host = os.environ.get("REDIS_HOST", "redis")
+redis_port = int(os.environ.get("REDIS_PORT", 6379))
+
+redis_client = redis.Redis(host=redis_host, port=redis_port)
+
+redis_broker = RedisBroker(host=redis_host, port=redis_port)
+redis_broker.add_middleware(AsyncIO())
+dramatiq.set_broker(redis_broker)
 
 
-def connect_redis(redis_host='redis', redis_port=6379, retries=5, delay=3):
-    attempt = 0
-    while attempt < retries:
-        try:
-            client = redis.Redis(host=redis_host, port=redis_port)
-            client.ping()
-            print("Connected to Redis!")
-            return client
-        except redis.exceptions.ConnectionError:
-            attempt += 1
-            print(f"Redis not available. Retry {attempt}/{retries}...")
-            time.sleep(delay)
-    raise Exception(f"Failed to connect to Redis after {retries} attempts")
-
-
-async def handle_frame(frame_data):
+@dramatiq.actor(queue_name="default")
+async def process_frame_task(frame_key):
+    global _pool
     try:
+        # Lazy init pool trong worker process khi task đầu tiên chạy
+        if _pool is None:
+            await init_db_pool()
+
+        raw = redis_client.get(frame_key)
+        if not raw:
+            print(f"[ERROR] Redis key {frame_key} not found")
+            return
+
+        frame_data = pickle.loads(raw)
         frame_idx = frame_data['frame_idx']
         frame_bytes = frame_data['frame']
         cam_id = frame_data.get('cam_id', 'default_cam')
 
-        if not isinstance(frame_bytes, (bytes, bytearray)):
-            print(f"[Worker] Invalid frame data type: {type(frame_bytes)}")
-            return
-
         image = Image.open(BytesIO(frame_bytes)).convert("RGB")
         img_np = np.array(image)
 
-        if img_np.ndim != 3 or img_np.shape[2] != 3:
-            print(f"[Worker] Invalid image shape in frame {frame_idx}. Skipping.")
-            return
+        pool = get_db_pool()
 
         result = await face_recognize(cam_id, img_np, frame_idx)
-        print(f"[Worker] Frame {frame_idx} (cam_id={cam_id}) recognized result: {result}")
-    except KeyError as ke:
-        print(f"[Worker] Missing key in frame data: {ke}")
+        print(f"[DONE] Frame {frame_idx} (cam_id={cam_id}) - Result: {result}")
+
     except Exception as e:
-        print(f"[Worker] Error processing frame {frame_data.get('frame_idx')} from camera {frame_data.get('cam_id')}: {e}")
+        print(f"[ERROR] Processing frame failed: {e}")
 
 
-async def process_frames(redis_host='redis', redis_port=6379, queue_name='video_frames', batch_size=4):
-    redis_client = connect_redis(redis_host, redis_port)
-    queue = RedisQueue(name=queue_name, redis_client=redis_client)
+def main():
+    queue = RedisQueue(name="video_frames", redis_client=redis_client)
 
-    while True:
-        frames_batch = []
-        for _ in range(batch_size):
-            try:
-                frame_data = queue.get()
-                if frame_data:
-                    frames_batch.append(frame_data)
-            except Exception as e:
-                print(f"[Worker] Error getting frame from queue: {e}")
-                time.sleep(1)
-
-        if frames_batch:
-            await asyncio.gather(*(handle_frame(f) for f in frames_batch))
-        else:
-            await asyncio.sleep(0.1)
-
-
-async def start_worker():
-    await init_db_pool()
     try:
-        await process_frames()
-    finally:
-        await close_db_pool()
+        while True:
+            frame_data = queue.get(block=True, timeout=1)
+            if frame_data:
+                try:
+                    frame_idx = frame_data.get("frame_idx")
+                    redis_key = f"frame:{frame_idx}"
+                    redis_client.setex(redis_key, 60, pickle.dumps(frame_data))
+                    process_frame_task.send(redis_key)
+                    print(f"[SEND] Frame {frame_idx} enqueued to dramatiq with key {redis_key}")
+                except Exception as e:
+                    print(f"[ERROR] Khi gửi frame lên Dramatiq: {e}")
+            else:
+                time.sleep(0.1)
+    except KeyboardInterrupt:
+        print("Stopping worker loop...")
 
 
 if __name__ == "__main__":
-    asyncio.run(start_worker())
+    main()

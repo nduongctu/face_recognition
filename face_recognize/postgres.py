@@ -1,11 +1,10 @@
 import os
 import asyncpg
+import asyncio
 from typing import Optional
 
-# Biến toàn cục để giữ pool
 _pool: Optional[asyncpg.Pool] = None
 
-# Lấy thông tin kết nối từ biến môi trường
 DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
 DB_PORT = int(os.getenv("POSTGRES_PORT", 5432))
 DB_USER = os.getenv("POSTGRES_USER", "postgres")
@@ -22,20 +21,20 @@ async def init_db_pool():
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,
-            min_size=5,
-            max_size=20
+            min_size=1,
+            max_size=2
         )
-        print(f"Đã kết nối đến PostgreSQL tại {DB_HOST}:{DB_PORT}")
-
-
-async def close_db_pool():
-    global _pool
-    if _pool:
-        await _pool.close()
-        _pool = None
+        print(f"[PID {os.getpid()}] PostgreSQL pool initialized.")
 
 
 def get_db_pool() -> asyncpg.Pool:
     if _pool is None:
         raise RuntimeError("Database pool has not been initialized.")
     return _pool
+
+
+def init_db_pool_sync():
+    """
+    Hàm sync dùng trong signal của dramatiq.
+    """
+    asyncio.run(init_db_pool())

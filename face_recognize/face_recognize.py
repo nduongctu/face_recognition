@@ -101,10 +101,6 @@ async def face_recognize(
         frame_idx: int,
         score_threshold: float = threshold
 ) -> Union[Dict[str, str], Dict[str, List[Dict[str, Any]]]]:
-    """
-    Nhận diện nhiều khuôn mặt trong một hình ảnh, trả về danh sách user_id hoặc thông báo cho mỗi khuôn mặt.
-    Chỉ lưu vào PostgreSQL và R2 nếu nhận dạng được người dùng.
-    """
     # Trích xuất vector khuôn mặt
     face_list = extract_vector(img_np)
 
@@ -114,17 +110,12 @@ async def face_recognize(
     if not face_list:
         return {"detail": "Không tìm thấy khuôn mặt"}
 
-    # Lấy kích thước ảnh một lần
     height, width, _ = img_np.shape
 
-    # Xử lý tất cả khuôn mặt song song
-    tasks = [
-        process_single_face(cam_id, img_np, face, frame_idx, height, width, score_threshold)
-        for face in face_list
-    ]
-    face_results = await asyncio.gather(*tasks)
-
-    # Lọc bỏ các kết quả None (khuôn mặt không thể xử lý)
-    results = [result for result in face_results if result is not None]
+    results = []
+    for face in face_list:
+        result = await process_single_face(cam_id, img_np, face, frame_idx, height, width, score_threshold)
+        if result is not None:
+            results.append(result)
 
     return results
