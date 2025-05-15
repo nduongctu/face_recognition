@@ -19,6 +19,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    env_file:
+      - .env
     volumes:
       - model_insightface:/root/.insightface/models
       - ./face_recognize:/app/face_recognize
@@ -85,8 +87,11 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    env_file:
+      - .env
     volumes:
       - ./face_recognize:/app/face_recognize
+      - ./.env:/app/.env
     networks:
       - app-network
 
@@ -104,6 +109,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    env_file:
+      - .env
     volumes:
       - model_insightface:/root/.insightface/models
       - ./face_recognize:/app/face_recognize
