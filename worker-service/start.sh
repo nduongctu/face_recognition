@@ -3,7 +3,7 @@ set -e
 
 # Khởi động dramatiq worker trong background
 echo "[STARTUP] Starting Dramatiq worker..."
-dramatiq -p 1 -t 2 worker &
+dramatiq -p 2 -t 4 worker &
 DRAMATIQ_PID=$!
 
 sleep 1
